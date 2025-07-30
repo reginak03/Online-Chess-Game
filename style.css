@@ -6,8 +6,8 @@ body {
 }
 
 .chessBoard {
-    width: 80vw;
-    height: 80vw;
+    width: 70vw;
+    height: 70vw;
     margin: 0 auto;
     display: flex;
     flex-wrap: wrap;
@@ -67,6 +67,98 @@ body {
     width: 100%;
     height: auto;
 }
+
+/*to indicate which player's turn it is*/
+.piece.active-turn {
+    outline: 3px solid beige;
+    outline-offset: -3px;
+    box-shadow: 0 0 10px gold;
+}
+
+.piece.active-turn.dragging {
+    outline: none;
+    box-shadow: none;
+}
+
+.legal-highlight {
+    outline: 3px solid rgb(209, 157, 89);
+    outline-offset: -4px;
+    box-shadow: 0 0 15px rgb(209, 157, 89);
+}
+
+.button {
+    position: absolute;
+    right: 20px;
+    padding: 10px 10px;
+    font-size: .65rem;
+    background-color: burlywood;
+    color: beige;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 2px 2px 10px (0,0,0,0.3);
+}
+
+.button:hover {
+    background-color: #d8b295;
+    opacity: 5;
+}
+
+.captured-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+#winnerAlert {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999; /*to ensure that the message appears above everything else */
+    
+    background-color: rgba(34, 139, 34, 0.95); /*forest green color with some transparency*/
+    color: #fff;
+    
+    padding: 30px 60px;
+    border-radius: 15px;
+    border: 3px solid white;
+
+    font-size: 2.5rem;
+    font-weight: bold;
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
+    display: none;
+}
+
+#checkAlert {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999; /*to ensure that the message appears above everything else */
+    
+    background-color: beige;
+    color: burlywood;
+    
+    padding: 20px 20px;
+    border-radius: 15px;
+    /* border: 3px solid white; */
+
+    font-size: 1.5rem;
+    font-weight: bold;
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
+    display: none;
+}
+
 
 @media (min-width:600px) {
     .chessboard {

@@ -5,21 +5,9 @@ This project consists of building an online chess game using HTML, CSS, and Java
 
 The chess board will be generated dynamically with JavaScript, and all the logic — including legal move detection, check/checkmate logic, turn switching, and move history — must be implemented in JavaScript. The game runs completely in the browser and does not require any backend.
 
-
 ## Tasks
--TOMORROW:
-- Dynamically generate the board using JavaScript.
-- Implement logic for:
-	Valid moves per piece
-	Turn switching
-	Check and checkmate detection
-	Illegal move prevention
-- Style the board and pieces using CSS or image assets.
-
-AFTER:
-- Allow restart/reset of the game.
-- Show captured pieces.
+- do the remaining 3 vids for other rules.
 - Implement a move history panel.
-- Display which player's turn it is.
-- Highlight legal moves when a piece is selected.
+- Highlight pieces when check/checkmate happens
+- play with AI
 - Final testing. Create README with instructions and screenshots. Submit as Git repo.
