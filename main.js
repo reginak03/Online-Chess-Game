@@ -7,6 +7,8 @@ let blackKingSquare = "e8";
 let checkDetectionEnabled = false;
 let highlightLegalMovesEnabled = false;
 
+let moves = []; //array of objects to keep track of the moves made by both sides (move history stack)
+
 const boardSquares = document.getElementsByClassName("square");
 const pieces = document.getElementsByClassName("piece");
 const piecesImages = document.getElementsByTagName("img");
@@ -27,9 +29,91 @@ document.getElementById("restartBtn").addEventListener("click", () => {
     location.reload(); //easiest method to reset everything
 });
 
+document.getElementById("undoBtn").addEventListener("click", () => {
+    if (moves.length === 0) return;
+
+    const lastMove = moves.pop();
+
+    const fromSquare = document.getElementById(lastMove.from);
+    const toSquare = document.getElementById(lastMove.to);
+
+    const movedPiece = toSquare.querySelector(".piece") || toSquare.querySelector("img") || toSquare.firstChild;
+
+    if (!movedPiece) return;
+
+    //move the piece back
+    fromSquare.appendChild(movedPiece);
+
+    //restore ID and classes (in case of promotion)
+    movedPiece.id = `${lastMove.pieceType}-${lastMove.pieceColor}-${lastMove.from}`;
+    movedPiece.classList.remove("queen", "rook", "bishop", "knight");
+    movedPiece.classList.add(lastMove.pieceType);
+    movedPiece.src = `pieces/${lastMove.pieceType}-${lastMove.pieceColor}.png`;
+
+    //restore captured piece if any
+    if (lastMove.isCapture && lastMove.capturedPiece) {
+        const capturedImg = document.createElement("img");
+        capturedImg.src = `pieces/${lastMove.capturedPiece.pieceType}-${lastMove.capturedPiece.pieceColor}.png`;
+        capturedImg.className = `piece ${lastMove.capturedPiece.pieceType}`;
+        capturedImg.setAttribute("color", lastMove.capturedPiece.pieceColor);
+        capturedImg.id = lastMove.capturedPiece.pieceId;
+        toSquare.appendChild(capturedImg);
+    }
+
+    //update board array
+    updateBoardSquaresArray(lastMove.to, lastMove.from, boardSquaresArray);
+    if (lastMove.isCapture && lastMove.capturedPiece) {
+        const square = boardSquaresArray.find(sq => sq.squareId === lastMove.to);
+        square.pieceType = lastMove.capturedPiece.pieceType;
+        square.pieceId = lastMove.capturedPiece.pieceId;
+        square.pieceColor = lastMove.capturedPiece.pieceColor;
+    }
+
+    //toggle turn back
+    isWhiteTurn = !isWhiteTurn;
+    highlightActivePieces();
+
+    //remove last move from history panel
+    updateMoveHistoryPanels(true); //pass true for undo
+});
+
 fillBoardSquaresArray();
 setupBoardSquares();
 setupPieces();
+
+//this function saves the move after it is made
+function makeMove(from, to, pieceType, pieceColor, isCapture) {
+    const move = {
+        from,
+        to,
+        pieceType,
+        pieceColor,
+        isCapture,
+        capturedPiece: null
+    };
+
+    if (isCapture) {
+        const capturedSquare = boardSquaresArray.find(sq => sq.squareId === to);
+        move.capturedPiece = {
+            pieceType: capturedSquare.pieceType,
+            pieceColor: capturedSquare.pieceColor,
+            pieceId: capturedSquare.pieceId
+        };
+    }
+
+    moves.push(move);
+}
+
+//initial makeMove function:
+// function makeMove(startingSquareId, destinationSquareId, pieceType, pieceColor, captured) {
+//     moves.push({
+//         from: startingSquareId,
+//         to: destinationSquareId,
+//         pieceType: pieceType,
+//         pieceColor: pieceColor,
+//         captured: captured //the captured property determines whether a capture has occurred during that move
+//     });
+// }
 
 function deepCopyArray(array) {
     //map method = built-in JS function that creates a new array populated with the results of calling a provided function on every element in the calling array
@@ -154,7 +238,7 @@ function drop(ev) {
     //drop function receives the data sent from the drag function
     let [pieceId, startingSquareId] = data.split("|");
     let legalSquaresJson = ev.dataTransfer.getData("application/json");
-    if (legalSquaresJson.length==0) return;
+    if (legalSquaresJson.length === 0) return;
     let legalSquares = JSON.parse(legalSquaresJson); //get the full list of legal squares
 
     const piece = document.getElementById(pieceId);
@@ -163,29 +247,27 @@ function drop(ev) {
     const pieceType = piece.classList[1];
     const destinationSquare = ev.currentTarget;
     let destinationSquareId = destinationSquare.id;
-    let squareContent = getPieceAtSquare(destinationSquareId, boardSquaresArray); //old isSquareOccupied function was replaced with the new getPieceAtSquare function
+    let squareContent = getPieceAtSquare(destinationSquareId, boardSquaresArray);
 
-    if (destinationSquareId === startingSquareId) return; // early exit to prevent going through the validation code that follows, if the piece was dropped back to its initial square
-    if (squareContent.pieceColor === pieceColor) return; // early exit to ignore drops onto squares occupied by same-color pieces
+    if (destinationSquareId === startingSquareId) return; //early exit to prevent going through the validation code that follows, if the piece was dropped back to its initial square
+    if (squareContent.pieceColor === pieceColor) return; //early exit to ignore drops onto squares occupied by same-color pieces
 
     //filter out legal squares that would put the king in check (illegal moves based on check rules)
     //legalSquares = isMoveValidAgainstCheck(legalSquares, startingSquareId, pieceColor, pieceType);
 
     if (checkDetectionEnabled) {
         legalSquares = isMoveValidAgainstCheck(legalSquares, startingSquareId, pieceColor, pieceType);
-    
+        
         if (!legalSquares.includes(destinationSquareId)) {
             //notify user and block move
             const alert = document.getElementById("checkAlert");
             const message = isWhiteTurn ? "White is in Check!" : "Black is in Check!";
             alert.innerText = message;
             alert.style.display = "block";
-            setTimeout(() => {
-                alert.style.display = "none";
-            }, 900);
+            setTimeout(() => alert.style.display = "none", 900);
             return;
         }
-    }    
+    }
 
     if (pieceType == "king" && checkDetectionEnabled) {
         let isCheck = isKingInCheck(destinationSquareId, pieceColor, boardSquaresArray);
@@ -194,36 +276,77 @@ function drop(ev) {
         isWhiteTurn ? (whiteKingSquare = destinationSquareId) : (blackKingSquare = destinationSquareId);
     }
 
-    if ((squareContent.pieceColor == "blank") && (legalSquares.includes(destinationSquareId))) { //((isSquareOccupied(destinationSquare) == "blank") && (legalSquares.includes(destinationSquareId))) {
+    if ((squareContent.pieceColor == "blank") && legalSquares.includes(destinationSquareId)) { //((isSquareOccupied(destinationSquare) == "blank") && (legalSquares.includes(destinationSquareId)))
+        const isPromotion = pieceType === "pawn" && destinationSquareId[1] === (pieceColor === "white" ? "8" : "1");
         destinationSquare.appendChild(piece);
+
+        if (isPromotion) {
+            showPromotionChoices(piece, pieceColor, destinationSquareId, startingSquareId);
+            return; //wait for promotion choice
+        }
+
+        makeMove(startingSquareId, destinationSquareId, pieceType, pieceColor, false);
         isWhiteTurn = !isWhiteTurn;
         highlightActivePieces();
-        // legalSquares.length = 0;
-        //after making each move on the chessboard, the boardSquaresArray should be updated to reflect the changes
+        //legalSquares.length = 0;
+
+        //castling
+        if (pieceType === "king" && ["g1", "g8", "c1", "c8"].includes(destinationSquareId)) { //if (pieceType === "king" && (destinationSquareId === "g1" || destinationSquareId === "g8" || destinationSquareId === "c1" || destinationSquareId === "c8"))
+            const rookFrom = destinationSquareId === "g1" ? "h1" :
+                            destinationSquareId === "g8" ? "h8" :
+                            destinationSquareId === "c1" ? "a1" : "a8";
+            const rookTo = destinationSquareId === "g1" ? "f1" :
+                        destinationSquareId === "g8" ? "f8" :
+                        destinationSquareId === "c1" ? "d1" : "d8";
+
+            const rookEl = document.getElementById("rook" + rookFrom);
+            const rookToSquare = document.getElementById(rookTo);
+            rookToSquare.appendChild(rookEl);
+            updateBoardSquaresArray(rookFrom, rookTo, boardSquaresArray);
+        }
+
+        //en passant capture
+        if (pieceType === "pawn" && squareContent.pieceColor === "blank") {
+            const fromRank = parseInt(startingSquareId[1]);
+            const toRank = parseInt(destinationSquareId[1]);
+            const fromFile = startingSquareId[0];
+            const toFile = destinationSquareId[0];
+
+            if (fromFile !== toFile && Math.abs(fromRank - toRank) === 1) {
+                const capturedPawnSquareId = toFile + fromRank;
+                const capturedSquare = document.getElementById(capturedPawnSquareId);
+                const capturedPiece = capturedSquare.querySelector(".piece");
+                if (capturedPiece) capturedPiece.remove();
+                updateBoardSquaresArray(capturedPawnSquareId, capturedPawnSquareId, boardSquaresArray); //remove captured pawn
+            }
+        }
+        updateMoveHistoryPanels(false);
         updateBoardSquaresArray(startingSquareId, destinationSquareId, boardSquaresArray);
-        checkForCheckmate(); //check for checkmate after each move
+        checkForCheckmate();
         return;
     }
 
-    if ((squareContent.pieceColor != "blank") && (legalSquares.includes(destinationSquareId))) { //((isSquareOccupied(destinationSquare) != "blank") && (legalSquares.includes(destinationSquareId))) {
+    if ((squareContent.pieceColor != "blank") && legalSquares.includes(destinationSquareId)) { //((isSquareOccupied(destinationSquare) != "blank") && (legalSquares.includes(destinationSquareId)))
         //capture logic
-        const capturedColor = squareContent.pieceColor;
-        const capturedType = squareContent.pieceType;
+        makeMove(startingSquareId, destinationSquareId, pieceType, pieceColor, false);
 
-        while(destinationSquare.firstChild) {
+        while (destinationSquare.firstChild) {
             destinationSquare.removeChild(destinationSquare.firstChild);
         }
         destinationSquare.appendChild(piece);
+
         isWhiteTurn = !isWhiteTurn;
         highlightActivePieces();
-        // legalSquares.length = 0;
+        //legalSquares.length = 0;
 
+        const capturedColor = squareContent.pieceColor;
+        const capturedType = squareContent.pieceType;
         //create an <img> for the captured piece
         const img = document.createElement("img");
         img.src = `pieces/${capturedType}-${capturedColor}.png`;
         img.width = 40;
         img.height = 40;
-    
+
         if (capturedColor === "white") {
             document.getElementById("captured-black").appendChild(img);
         } else {
@@ -231,22 +354,20 @@ function drop(ev) {
         }
 
         //king is captured = game is over (display end game message)
-        if (squareContent.pieceType === "king") {
+        if (capturedType === "king") {
             const alert = document.getElementById("winnerAlert");
-            const winner = pieceColor === "white" ? "White Wins!" : "Black Wins!";
-            alert.innerHTML = winner;
+            alert.innerHTML = pieceColor === "white" ? "White Wins!" : "Black Wins!";
             alert.style.display = "block";
-
-            setTimeout(function() {
-                alert.style.display= "none"; 
-            }, 5000); //hide message after 5 seconds
+            setTimeout(() => alert.style.display = "none", 5000);
             disableAllMoves();
             return;
         }
+
+        updateMoveHistoryPanels(false);
         updateBoardSquaresArray(startingSquareId, destinationSquareId, boardSquaresArray);
         checkForCheckmate();
         return;
-    }  
+    }
 }
 
 //takes startingSquareId and destinationSquareId as arguments and updates their respective objects in the boardSquaresArray after each move
@@ -298,6 +419,7 @@ function getPossibleMoves(startingSquareId, piece, boardSquaresArray) { //takes 
     }
 }
 
+//before isSquareOccupied function:
 // function isSquareOccupied(square) {
 //     if (square.querySelector(".piece")) {
 //         const color = square.querySelector(".piece").getAttribute("color");
@@ -323,6 +445,10 @@ function getPawnMoves(startingSquareId, pieceColor, boardSquaresArray) {
     let diagonalSquares = checkPawnDiagonalCaptures(startingSquareId, pieceColor, boardSquaresArray);
     let forwardSquares = checkPawnForwardMoves(startingSquareId, pieceColor, boardSquaresArray);
     let legalSquares = [...diagonalSquares, ...forwardSquares];
+
+    let enPassantSquare = getEnPassantSquare(startingSquareId, pieceColor);
+    if (enPassantSquare) legalSquares.push(enPassantSquare);
+
     return legalSquares;
 }
 
@@ -349,6 +475,7 @@ function checkPawnDiagonalCaptures(startingSquareId, pieceColor, boardSquaresArr
             // currentSquare = document.getElementById(currentSquareId);
             // squareContent = isSquareOccupied(currentSquare);
             let currentSquare = boardSquaresArray.find((element) => element.squareId === currentSquareId);
+            if (!currentSquare) continue; 
             const squareContent = currentSquare.pieceColor;
             if (squareContent != "blank" && squareContent != pieceColor)
                 legalSquares.push(currentSquareId);
@@ -376,8 +503,11 @@ function checkPawnForwardMoves(startingSquareId, pieceColor, boardSquaresArray) 
     currentSquareId = currentFile+currentRank;
     // currentSquare = document.getElementById(currentSquareId);
     // squareContent = isSquareOccupied(currentSquare);
+
     let currentSquare = boardSquaresArray.find((element) => element.squareId === currentSquareId);
+    if (!currentSquare) return legalSquares; //if square is out of bounds (for the last rank)
     let squareContent = currentSquare.pieceColor;
+
     if (squareContent != "blank") 
         return legalSquares;
     legalSquares.push(currentSquareId);
@@ -391,6 +521,7 @@ function checkPawnForwardMoves(startingSquareId, pieceColor, boardSquaresArray) 
     // currentSquare = document.getElementById(currentSquareId);
     // squareContent = isSquareOccupied(currentSquare);
     currentSquare = boardSquaresArray.find((element) => element.squareId === currentSquareId);
+    if (!currentSquare) return legalSquares;
     squareContent = currentSquare.pieceColor;
     if (squareContent != "blank") 
         return legalSquares;
@@ -654,7 +785,8 @@ function getQueenMoves(startingSquareId, pieceColor, boardSquaresArray) {
     return legalSquares;
 }
 
-function getKingMoves(startingSquareId, pieceColor, boardSquaresArray) {
+function getKingMoves(startingSquareId, pieceColor, boardSquaresArray, skipCastling = false) { //skip castling flag when it’s being used inside isKingInCheck() to avoid infinite loop
+
     const file = startingSquareId.charCodeAt(0)-97;
     const rank = startingSquareId.charAt(1);
     const rankNumber = parseInt(rank);
@@ -681,7 +813,28 @@ function getKingMoves(startingSquareId, pieceColor, boardSquaresArray) {
             legalSquares.push(String.fromCharCode(currentFile+97) + currentRank);
         }
     });
-    return legalSquares
+
+    //castling logic
+    if (!skipCastling && !hasPieceMoved(pieceColor + "king")) {
+        //kingside castling
+        if (
+            !hasPieceMoved(pieceColor + "rookh") &&
+            isPathClearForCastling(startingSquareId, "kingside", boardSquaresArray, pieceColor) &&
+            !wouldPassThroughCheck(startingSquareId, "kingside", boardSquaresArray, pieceColor)
+        ) {
+            legalSquares.push(pieceColor === "white" ? "g1" : "g8");
+        }
+        //queenside castling
+        if (
+            !hasPieceMoved(pieceColor + "rooka") &&
+            isPathClearForCastling(startingSquareId, "queenside", boardSquaresArray, pieceColor) &&
+            !wouldPassThroughCheck(startingSquareId, "queenside", boardSquaresArray, pieceColor)
+        ) {
+            legalSquares.push(pieceColor === "white" ? "c1" : "c8");
+        }
+    }
+
+    return legalSquares;
 }
 
 //this function receives a squareId and pieceColor as arguments and checks if the king of the given color would be in check if it were on the square with the given squareId
@@ -716,7 +869,7 @@ function isKingInCheck(squareId, pieceColor, boardSquaresArray) {
             return true;
     }
 
-    legalSquares = getKingMoves(squareId, pieceColor, boardSquaresArray);
+    legalSquares = getKingMoves(squareId, pieceColor, boardSquaresArray, true); //true to avoid entering the castling block when it's not needed (we're only checking is the king is in check here)
     for (let squareId of legalSquares) {
         let pieceProperties = getPieceAtSquare(squareId, boardSquaresArray);
         if ((pieceProperties.pieceType == "king") && pieceColor != pieceProperties.pieceColor)
@@ -757,7 +910,6 @@ function checkForCheckmate() {
     let boardSquaresArrayCopy = deepCopyArray(boardSquaresArray);
     let kingIsCheck = isKingInCheck(kingSquare, pieceColor, boardSquaresArrayCopy);
     if (!kingIsCheck) return;
-    highlightCheckedKing();
     let possibleMoves = getAllPossibleMoves(boardSquaresArrayCopy, pieceColor);
     if (possibleMoves.length > 0) return;
 
@@ -771,25 +923,6 @@ function checkForCheckmate() {
         alert.style.display= "none"; 
     }, 5000); //hide message after 5 seconds
 }
-
-// function highlightCheckedKing() {
-//     if (!checkDetectionEnabled) return;
-
-//     const color = isWhiteTurn ? "white" : "black";
-//     const kingSquareId = isWhiteTurn ? whiteKingSquare : blackKingSquare;
-//     const kingSquare = document.getElementById(kingSquareId);
-
-//     //highlight the square
-//     kingSquare.classList.add("check-highlight");
-
-//     //highlight the piece
-//     const kingPiece = kingSquare.querySelector(".piece");
-//     if (kingPiece) kingPiece.classList.add("check-highlight");
-// }
-
-// function clearCheckHighlights() {
-//     document.querySelectorAll(".check-highlight").forEach(el => el.classList.remove("check-highlight"));
-// }
 
 //finds all legal moves for every piece on one side and stores the results in an array
 function getAllPossibleMoves(squaresArray, color) {
@@ -821,5 +954,155 @@ function highlightLegalSquares(squares) {
 function clearHighlightedSquares() {
     for (let square of boardSquares) {
         square.classList.remove("legal-highlight");
+    }
+}
+
+//helper functions for the castling move:
+function hasPieceMoved(pieceId) {
+    return moves.some(move => move.pieceId === pieceId);
+}
+
+function isPathClearForCastling(kingSquare, side, board, color) {
+    const files = side === "kingside" ? ["f", "g"] : ["b", "c", "d"];
+    const rank = color === "white" ? "1" : "8";
+    return files.every(file => {
+        const square = board.find(el => el.squareId === file + rank);
+        return square.pieceType === "blank";
+    });
+}
+
+function wouldPassThroughCheck(kingSquare, side, board, color) {
+    if (!checkDetectionEnabled) return false;
+    const squaresToCheck = side === "kingside"
+        ? [kingSquare, color === "white" ? "f1" : "f8", color === "white" ? "g1" : "g8"]
+        : [kingSquare, color === "white" ? "d1" : "d8", color === "white" ? "c1" : "c8"];
+    return squaresToCheck.some(square => isKingInCheck(square, color, board));
+}
+
+//helper function for the en passant move (when a pawn advances 2 squares an adjacent enemy pawn can capture it as if it moved 1 square)
+function getEnPassantSquare(startingSquareId, pieceColor) {
+    const lastMove = moves[moves.length - 1];
+    if (!lastMove || lastMove.pieceType !== "pawn") return null;
+
+    const startFile = startingSquareId[0];
+    const startRank = parseInt(startingSquareId[1]);
+
+    const opponentColor = pieceColor === "white" ? "black" : "white";
+    const direction = pieceColor === "white" ? 1 : -1;
+    const sideFiles = [String.fromCharCode(startFile.charCodeAt(0) - 1), String.fromCharCode(startFile.charCodeAt(0) + 1)];
+
+    for (const file of sideFiles) {
+        const square = file + startRank;
+        if (lastMove.to === file + (pieceColor === "white" ? "5" : "4") &&
+            lastMove.from === file + (pieceColor === "white" ? "7" : "2")) {
+            return file + (startRank + direction);
+        }
+    }
+
+    return null;
+}
+
+//helper function for the promotion rule
+function showPromotionChoices(piece, pieceColor, destinationSquareId, startingSquareId) {
+    const container = document.getElementById("promotionContainer");
+
+    //update images to match color
+    container.querySelectorAll(".promotion-option").forEach(opt => {
+        const type = opt.getAttribute("data-type");
+        opt.querySelector("img").src = `pieces/${type}-${pieceColor}.png`;
+    });
+
+    //position container over promoted square
+    const squareEl = document.getElementById(destinationSquareId);
+    // const rect = squareEl.getBoundingClientRect();
+    // container.style.left = `${rect.left}px`;
+    // container.style.top = `${rect.top}px`;
+    const rect = squareEl.getBoundingClientRect();
+    const boardRect = document.getElementById("game-container").getBoundingClientRect();
+    const squareSize = rect.width; // assuming square is square
+
+    container.style.width = `${squareSize}px`;
+    container.style.left = `${rect.left}px`;
+
+    //show promotion menu downward for white, upward for black
+    if (pieceColor === "black") {
+        container.style.top = `${rect.top - (squareSize * 3)}px`; //up 4 squares
+    } else {
+        container.style.top = `${rect.top}px`; //start from square
+    }
+
+    container.style.display = "flex";
+
+    //add click listeners
+    const listener = (e) => {
+        const newType = e.currentTarget.getAttribute("data-type");
+
+        //get the <img> inside the .piece div
+        const img = piece.querySelector("img");
+        if (!img) {
+            console.error("No <img> found in piece element!");
+            return;
+        }
+
+        // // piece.classList.remove("pawn");
+        // // piece.classList.add(newType);
+        // piece.classList.remove("pawn", "rook", "knight", "bishop", "queen"); //to ensure no class conflict
+        // piece.classList.add(newType);
+        // piece.src = `pieces/${newType}-${pieceColor}.png`;
+
+        //replace piece type class and update image source
+        img.classList.remove("pawn", "rook", "knight", "bishop", "queen");
+        img.classList.add(newType);
+        img.src = `pieces/${newType}-${pieceColor}.png`;
+
+        //ensure ID is unique!!
+        const newId = `${newType}-${pieceColor}-${destinationSquareId}`;
+        img.id = newId; //piece.id = newId;
+
+        //update board array state
+        const squareData = boardSquaresArray.find(sq => sq.squareId === destinationSquareId);
+        squareData.pieceType = newType;
+        squareData.pieceId = newId;
+        squareData.pieceColor = pieceColor;
+
+        //hide promotion popup menu and resume game
+        container.style.display = "none";
+        container.querySelectorAll(".promotion-option").forEach(opt => {
+            opt.removeEventListener("click", listener);
+        });
+
+        makeMove(startingSquareId, destinationSquareId, "pawn", pieceColor, false); //log promotion as a pawn move
+        updateBoardSquaresArray(startingSquareId, destinationSquareId, boardSquaresArray);
+        isWhiteTurn = !isWhiteTurn;
+        highlightActivePieces();
+        checkForCheckmate();
+    };
+
+    container.querySelectorAll(".promotion-option").forEach(opt => {
+        opt.addEventListener("click", listener);
+    });
+}
+
+function updateMoveHistoryPanels(isUndo = false) {
+    const whitePanel = document.getElementById("white-history");
+    const blackPanel = document.getElementById("black-history");
+
+    if (isUndo) {
+        const target = isWhiteTurn ? blackPanel : whitePanel;
+        if (target.lastChild) target.removeChild(target.lastChild);
+        return;
+    }
+
+    const lastMove = moves[moves.length - 1];
+    const text = `${lastMove.pieceType[0].toUpperCase()} ${lastMove.from} → ${lastMove.to}` +
+        (lastMove.isCapture ? " ×" : "");
+
+    const entry = document.createElement("li");
+    entry.innerText = text;
+
+    if (lastMove.pieceColor === "white") {
+        whitePanel.appendChild(entry);
+    } else {
+        blackPanel.appendChild(entry);
     }
 }

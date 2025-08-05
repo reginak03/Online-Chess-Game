@@ -1,13 +1,23 @@
 # Online chess game
 
 ## Description
-This project consists of building an online chess game using HTML, CSS, and JavaScript. The goal is to create an interactive 2-player chess game that works in the browser, using only local technologies — no servers are required. Players should be able to move pieces according to chess rules, restart games, and track whose turn it is.
+An interactive 2-player online chess game built with HTML, CSS, and JavaScript. Players are able to move pieces according to chess rules, restart the game, track the moves played and more, with a user-friendly interface.
 
-The chess board will be generated dynamically with JavaScript, and all the logic — including legal move detection, check/checkmate logic, turn switching, and move history — must be implemented in JavaScript. The game runs completely in the browser and does not require any backend.
+## Functionalities Implemented
+- Normal chess game rules (pieces can only be dropped on a square if it is part of their legal moves)
+- Other rules such as the castling and en passant, as well as the promotion rule
+- restart game
+- undo a move
+- enabling/disabling check detection
+- turn switching with highlighting of the player's turn's pieces
+- move history panel for each player
+- highlighting legal moves of a selected piece
 
-## Tasks
-- do the remaining 3 vids for other rules.
-- Implement a move history panel.
-- Highlight pieces when check/checkmate happens
-- play with AI
-- Final testing. Create README with instructions and screenshots. Submit as Git repo.
+## Future Implementations
+- Draw logic
+- Play with AI
+- Redo button
+- Animate undo visually
+- Responsiveness for different screen sizes
+- Highlight pieces when check/checkmate happens (currently player is only informed, not shown)
+- More game testing for errors
